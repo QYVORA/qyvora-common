@@ -135,7 +135,7 @@ func known(name string) (Framework, bool) {
 		f = Framework{Name: "shaka", VersionJSON: []string{"version", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	case "sekhmet":
 		f = Framework{Name: "sekhmet", VersionJSON: []string{"version", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
-	case "imhotep", "timbuktu", "sundiata", "amanirenas", "kush":
+	case "imhotep", "timbuktu", "sundiata", "amanirenas", "kush": // this line seems to be wrong compared to other lines at the top for the other frameworks
 		f = Framework{Name: name, VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	default:
 		return f, false
