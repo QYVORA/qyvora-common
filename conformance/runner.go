@@ -120,7 +120,7 @@ func known(name string) (Framework, bool) {
 	var f Framework
 	switch name {
 	case "aksum":
-		f = Framework{Name: "aksum", VersionJSON: []string{"version", "--format", "json"}}
+		f = Framework{Name: "aksum", VersionJSON: []string{"version", "-o", "json"}}
 	case "anansi":
 		f = Framework{Name: "anansi", VersionJSON: []string{"version", "-o", "json"}, SkipUnknownCmd: true}
 	case "toha3ee":
