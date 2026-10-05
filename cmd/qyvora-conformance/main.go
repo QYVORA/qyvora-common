@@ -94,19 +94,20 @@ func main() {
 }
 
 func render(results []conformance.Result) {
-	fmt.Printf("%-12s %-10s %-22s %-12s %-12s %-12s   %s\n", "framework", "version", "version-semver", "usage-exit-2", "unknown-cmd-2", "capabilities", "result")
+	fmt.Printf("%-12s %-10s %-22s %-12s %-12s %-12s %-12s   %s\n", "framework", "version", "version-semver", "usage-exit-2", "unknown-cmd-2", "capabilities", "tui-bundled", "result")
 	failed := 0
 	for _, r := range results {
 		byName := map[string]bool{}
 		for _, c := range r.Checks {
 			byName[c.Name] = c.Pass
 		}
-		row := fmt.Sprintf("%-12s %-10s %-22s %-12s %-12s %-12s   ",
+		row := fmt.Sprintf("%-12s %-10s %-22s %-12s %-12s %-12s %-12s   ",
 			r.Framework, r.Version,
 			mark(byName["version-semver"] && byName["version-exit0"]),
 			mark(byName["usage-exit-2"]),
 			mark(byName["unknown-cmd-exit-2"]),
 			mark(byName["capabilities"]),
+			mark(byName["tui-bundled"]),
 		)
 		if r.Passed() {
 			fmt.Println(row + "PASS")

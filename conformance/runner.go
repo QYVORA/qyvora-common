@@ -36,6 +36,13 @@ type Framework struct {
 	SkipUnknownCmd bool
 }
 
+// TUIModulePath is the Go module every framework must embed. An installed
+// binary carries the shared terminal UI with it, so the module has to be
+// linked into the binary rather than merely required by go.mod: a tool that
+// requires the module but never imports it ships without a TUI, and on a
+// user's machine that surfaces as a tool which starts and shows nothing.
+const TUIModulePath = "github.com/QYVORA/qyvora-tui"
+
 // Check is a single conformance verdict.
 type Check struct {
 	Framework string `json:"framework"`
@@ -223,8 +230,119 @@ func (f Framework) Run() Result {
 		checks = append(checks, Check{f.Name, "capabilities", true, "no capabilities command (documented gap)"})
 	}
 
+	// 5. Distribution: the binary must embed the shared TUI, so an installed
+	// tool is never a bare CLI stripped of its interface.
+	checks = append(checks, checkTUIBundled(f.Name, f.Bin))
+
 	res.Checks = checks
 	return res
+}
+
+// checkTUIBundled verifies that bin links the shared TUI module.
+//
+// It reads the binary's build info rather than the repository's go.mod on
+// purpose. go.mod records the requirement; only the linker records what was
+// actually compiled in. A module can sit in go.mod, satisfy `go mod tidy`,
+// and still be absent from the binary, which is exactly the case where a
+// release ships a tool with no TUI and every test still passes.
+func checkTUIBundled(name, bin string) Check {
+	const checkName = "tui-bundled"
+	cmd := exec.Command("go", "version", "-m", bin)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(out))
+		if detail == "" {
+			detail = err.Error()
+		}
+		// Not being able to read the build info is not evidence the TUI is
+		// missing, but it is not evidence it is there either, so it fails
+		// rather than passing silently.
+		return Check{name, checkName, false, "cannot read build info: " + detail}
+	}
+	version, linked := tuiModuleVersion(string(out))
+	switch {
+	case linked:
+		return Check{name, checkName, true, version}
+	case version != "":
+		return Check{name, checkName, false, fmt.Sprintf("%s %s required but not linked into the binary", TUIModulePath, version)}
+	default:
+		return Check{name, checkName, false, fmt.Sprintf("%s absent from the binary", TUIModulePath)}
+	}
+}
+
+// tuiModuleVersion extracts the TUI module's version from `go version -m`
+// output and reports whether its code was linked into the binary.
+//
+// A build-info line is tab-separated and the module path is not necessarily
+// the first field: a dependency reads "dep", path, version, "h1:" hash. So the
+// path is located by value and the version is the field after it, which holds
+// whether the line is a dep, a replace source, or anything else.
+//
+// The h1: hash is the discriminator. A module that is required but whose
+// packages were never imported is listed without one, so treating a line's
+// mere presence as proof of linkage would pass exactly the binaries this
+// check exists to catch.
+//
+// A module resolved through a replace directive is split across two lines,
+// with the "=>" continuation carrying the hash. No framework replaces the TUI
+// today, but reading only the dep line would report such a binary as
+// unlinked, which would be a false failure rather than a useful signal.
+func tuiModuleVersion(buildInfo string) (version string, linked bool) {
+	lines := strings.Split(buildInfo, "\n")
+	for i, line := range lines {
+		fields := strings.Split(strings.TrimSpace(line), "\t")
+		at := -1
+		for j, f := range fields {
+			if strings.TrimSpace(f) == TUIModulePath {
+				at = j
+				break
+			}
+		}
+		if at < 0 {
+			continue
+		}
+		if at+1 < len(fields) {
+			version = strings.TrimSpace(fields[at+1])
+		}
+		if hasContentHash(fields) {
+			return version, true
+		}
+		// Replaced module: the hash moved to the "=>" continuation line.
+		if i+1 < len(lines) {
+			next := strings.Split(strings.TrimSpace(lines[i+1]), "\t")
+			if len(next) > 0 && strings.TrimSpace(next[0]) == "=>" {
+				if replaced := replacementVersion(next); replaced != "" {
+					version = replaced
+				}
+				if hasContentHash(next) {
+					return version, true
+				}
+			}
+		}
+		return version, false
+	}
+	return "", false
+}
+
+// hasContentHash reports whether a build-info line carries an "h1:" hash,
+// which the linker records only for modules compiled into the binary.
+func hasContentHash(fields []string) bool {
+	for _, f := range fields {
+		if strings.HasPrefix(strings.TrimSpace(f), "h1:") {
+			return true
+		}
+	}
+	return false
+}
+
+// replacementVersion pulls the version out of an "=>" continuation line.
+func replacementVersion(fields []string) string {
+	for _, f := range fields[1:] {
+		if v := strings.TrimSpace(f); strings.HasPrefix(v, "v") {
+			return v
+		}
+	}
+	return ""
 }
 
 // run executes the binary with args under a timeout, returning combined
