@@ -1,15 +1,15 @@
 # qyvora-common
 
 **Status:** `CURRENT` · **Not a security tool**
-**Last verified against implementation:** 2026-09-30
+**Last verified against implementation:** 2026-10-05
 
 `qyvora-common` is the **reference machine contract** and **conformance
-harness** for the thirteen QYVORA security frameworks.
+harness** for the fourteen QYVORA security frameworks.
 
 It is one of three supporting repositories alongside `qyvora-tui` (shared
 terminal UI) and `qyvora-dist` (distribution). **None of the three is a
 security framework.** Counting any of them as a tool makes the ecosystem
-"14 tools", which is wrong.
+"15 tools", which is wrong.
 
 ## What this module is
 
@@ -29,8 +29,9 @@ against. See the package doc in `contract/contract.go`.
 ```
 contract/contract.go          authored schema + exit codes + validators
 contract/contract_test.go     validator tests
-conformance/runner.go         builds a framework and probes its real binary
-cmd/qyvora-conformance/main.go  the CLI
+ conformance/runner.go         builds a framework and probes its real binary
+ conformance/tui_test.go       `go version -m` build-info parsing for TUI linkage
+ cmd/qyvora-conformance/main.go  the CLI
 ```
 
 ### `contract/` — the schema
@@ -70,6 +71,10 @@ Validators: `IsSemverVersion`, `ValidateVersion` (a framework must not report
   positional target (`anansi example.com`);
 - the `capabilities` command, when advertised, succeeds. An absent command is
   recorded as a documented gap, not a failure.
+- the release binary actually **links** `github.com/QYVORA/qyvora-tui`, proved by
+  the `h1:` content hash the linker records in `go version -m` output. A
+  `require` alone does not pass this check, which is exactly what catches a
+  framework whose TUI import was dropped or moved to a build tag.
 
 The runner exits non-zero when any check fails, so it can run in CI.
 
@@ -77,26 +82,35 @@ The runner exits non-zero when any check fails, so it can run in CI.
 
 ```bash
 # one framework
-go run ./cmd/qyvora-conformance --workspace .. --framework shaka
+go run ./cmd/qyvora-conformance -root .. -bin /tmp/qf-shaka:shaka
 
-# all frameworks in a workspace
-go run ./cmd/qyvora-conformance --workspace ..
+# all frameworks in a workspace (builds each one)
+go run ./cmd/qyvora-conformance -root ..
+
+# machine-readable results
+go run ./cmd/qyvora-conformance -root .. -json
 ```
 
-## Known gaps (verified 2026-09-30)
+`-skip-build` reuses already-built binaries, and each `-bin` entry is
+`<path>:<name>`.
 
-- **Aksum and TOHA3EE do not implement a `capabilities` command.** The runner
-  records these as documented gaps rather than failures, so conformance passes
-  while the capability gap persists. `IN PROGRESS`.
-- The `known` descriptor table in `conformance/runner.go:119` does not declare a
-  `capabilities` probe for Nzinga, Shaka, or Sekhmet even though all three do
-  implement the command. The probe is therefore not exercised for them. This is
-  a *runner* gap, not a tool gap.
+## Known gaps (verified 2026-10-05)
+
+- **Aksum, Anansi, and TOHA3EE do not implement a `capabilities` command.** The
+  runner records these as documented gaps rather than failures, so conformance
+  passes while the capability gap persists. `IN PROGRESS`.
+  - Anansi must **not** be given a `capabilities` probe: its root command treats
+    any unrecognized positional as a scan target, so `anansi capabilities` runs a
+    real scan against a host literally named `capabilities` (reaching out to
+    crt.sh) instead of printing a manifest.
+- Each framework's `scripts/verify-artifact.sh` repeats the TUI linkage check
+  against the **released** binary, so a published artifact cannot silently ship
+  without its TUI.
 
 ## Ecosystem position
 
-Last full run: **13/13 frameworks fully conformant**, `0` warnings, as part of
-`./check-all.sh --quick` (2026-09-30). `check-all.sh` builds and tests this
+Last full run: **14/14 frameworks fully conformant**, `0` warnings, as part of
+`./check-all.sh --quick` (2026-10-05). `check-all.sh` builds and tests this
 module too, but does **not** cover `qyvora-tui`.
 
 Related: the normative output contract is

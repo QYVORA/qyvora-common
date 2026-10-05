@@ -135,15 +135,20 @@ func known(name string) (Framework, bool) {
 	case "jabari":
 		f = Framework{Name: "jabari", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	case "nzinga":
-		f = Framework{Name: "nzinga", VersionJSON: []string{"version", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
+		f = Framework{Name: "nzinga", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	case "mansa":
 		f = Framework{Name: "mansa", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	case "shaka":
-		f = Framework{Name: "shaka", VersionJSON: []string{"version", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
+		f = Framework{Name: "shaka", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	case "sekhmet":
-		f = Framework{Name: "sekhmet", VersionJSON: []string{"version", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
-	case "imhotep", "timbuktu", "sundiata", "amanirenas", "kush": // this line seems to be wrong compared to other lines at the top for the other frameworks
+		f = Framework{Name: "sekhmet", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
+	case "imhotep", "timbuktu", "sundiata", "amanirenas", "kush":
 		f = Framework{Name: name, VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
+	case "amina":
+		// Amina distinguishes an unknown command from a target positional: a bare
+		// invocation is an assessment, but an unrecognised word is a usage error,
+		// so the unknown-cmd check applies.
+		f = Framework{Name: "amina", VersionJSON: []string{"version", "-o", "json"}, CapJSON: []string{"capabilities", "-o", "json"}, EventsFlag: "--events", FormatFlag: "-o"}
 	default:
 		return f, false
 	}
