@@ -113,5 +113,11 @@ Last full run: **14/14 frameworks fully conformant**, `0` warnings, as part of
 `./check-all.sh --quick` (2026-10-05). `check-all.sh` builds and tests this
 module too, but does **not** cover `qyvora-tui`.
 
+**Capability coverage validation:** For PROMPT.md compliance checking (output formats,
+tiers, noise levels), see the standalone `qyvora-conformance` tool. The two
+conformance validators serve different phases:
+- This tool (qyvora-common) → Machine contract for Phase 5 (AI orchestration)
+- qyvora-conformance → Capability requirements for Phase 1 (standardization)
+
 Related: the normative output contract is
 [`QYVORA-TOOL-OUTPUT-SPEC.md`](../../../knowledge/qyvora-docs/09-technical/cross-project/QYVORA-TOOL-OUTPUT-SPEC.md).
