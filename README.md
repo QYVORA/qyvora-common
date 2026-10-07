@@ -1,10 +1,10 @@
 # qyvora-common
 
 **Status:** `CURRENT` · **Not a security tool**
-**Last verified against implementation:** 2026-10-05
+**Last verified against implementation:** 2026-10-07
 
 `qyvora-common` is the **reference machine contract** and **conformance
-harness** for the fourteen QYVORA security frameworks.
+validation suite** for the fourteen QYVORA security frameworks.
 
 It is one of three supporting repositories alongside `qyvora-tui` (shared
 terminal UI) and `qyvora-dist` (distribution). **None of the three is a
@@ -17,21 +17,27 @@ security framework.** Counting any of them as a tool makes the ecosystem
 |---|---|
 | Module path | `github.com/QYVORA/qyvora-common` |
 | Go | `1.26` |
-| Packages | `contract/`, `conformance/`, `cmd/qyvora-conformance` |
+| Packages | `contract/`, `conformance/`, `capvalidator/`, `cmd/qyvora-conformance`, `cmd/qyvora-capvalidator` |
 | Imported by the frameworks? | **No.** Each framework implements the contract natively. |
 
 This is deliberate. The frameworks stay independent Go modules; `contract/` is
 the *authored schema* they are all measured against, not a library they link
 against. See the package doc in `contract/contract.go`.
 
+Two CLI tools validate framework compliance:
+- `cmd/qyvora-conformance` — machine contract validator (exit codes, TUI linkage)
+- `cmd/qyvora-capvalidator` — capability coverage validator (tiers, noise levels, output formats)
+
 ## Contents
 
 ```
-contract/contract.go          authored schema + exit codes + validators
-contract/contract_test.go     validator tests
- conformance/runner.go         builds a framework and probes its real binary
- conformance/tui_test.go       `go version -m` build-info parsing for TUI linkage
- cmd/qyvora-conformance/main.go  the CLI
+contract/contract.go               authored schema + exit codes + validators
+contract/contract_test.go          validator tests
+conformance/runner.go              builds a framework and probes its real binary
+conformance/tui_test.go            `go version -m` build-info parsing for TUI linkage
+capvalidator/README.md             capability coverage validation documentation
+cmd/qyvora-conformance/main.go     machine contract validator CLI
+cmd/qyvora-capvalidator/main.go    capability coverage validator CLI
 ```
 
 ### `contract/` — the schema
