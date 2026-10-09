@@ -30,10 +30,6 @@ type Framework struct {
 	CapJSON     []string // args producing machine-readable capabilities, or nil if the framework has no capabilities command
 	EventsFlag  string   // the events flag name, e.g. "--events", or "" if absent
 	FormatFlag  string   // the output-format flag, e.g. "-o"
-	// SkipUnknownCmd marks frameworks whose root command accepts an arbitrary
-	// positional as a target (so "bogus-xyz" cannot be distinguished from a
-	// valid invocation). The unknown-cmd exit-code check is skipped for them.
-	SkipUnknownCmd bool
 }
 
 // TUIModulePath is the Go module every framework must embed. An installed
@@ -129,7 +125,7 @@ func known(name string) (Framework, bool) {
 	case "aksum":
 		f = Framework{Name: "aksum", VersionJSON: []string{"version", "-o", "json"}}
 	case "anansi":
-		f = Framework{Name: "anansi", VersionJSON: []string{"version", "-o", "json"}, SkipUnknownCmd: true}
+		f = Framework{Name: "anansi", VersionJSON: []string{"version", "-o", "json"}}
 	case "toha3ee":
 		f = Framework{Name: "toha3ee", VersionJSON: []string{"version", "-o", "json"}}
 	case "jabari":
@@ -218,12 +214,13 @@ func (f Framework) Run() Result {
 		fmt.Sprintf("unknown flag exit=%d err=%v", code, err)})
 
 	// 3. Exit contract: an unknown command is usage (2), where the CLI shape
-	// lets us distinguish a command from a target positional.
-	if !f.SkipUnknownCmd {
-		_, code, err = f.run("definitely-not-a-command-xz")
-		checks = append(checks, Check{f.Name, "unknown-cmd-exit-2", err == nil && code == contract.ExitUsage,
-			fmt.Sprintf("unknown command exit=%d err=%v", code, err)})
-	}
+	// lets us distinguish a command from a target positional. Every framework
+	// now rejects a mistyped command; anansi's root takes a bare target, but its
+	// Args validation classifies dotless words as unknown commands so the same
+	// check applies.
+	_, code, err = f.run("definitely-not-a-command-xz")
+	checks = append(checks, Check{f.Name, "unknown-cmd-exit-2", err == nil && code == contract.ExitUsage,
+		fmt.Sprintf("unknown command exit=%d err=%v", code, err)})
 
 	// 4. Discovery: capabilities command, when advertised, must work.
 	if f.CapJSON != nil {
@@ -322,6 +319,13 @@ func tuiModuleVersion(buildInfo string) (version string, linked bool) {
 				if hasContentHash(next) {
 					return version, true
 				}
+				// A filesystem replacement (=> ../dir, => ./dir, => /abs/dir)
+				// carries no h1 hash because the source is not in the module
+				// cache, but a replace directive only satisfies the import, so
+				// the TUI's code is necessarily compiled into the binary.
+				if localPath := replacementPath(next); localPath {
+					return version, true
+				}
 			}
 		}
 		return version, false
@@ -348,6 +352,24 @@ func replacementVersion(fields []string) string {
 		}
 	}
 	return ""
+}
+
+// replacementPath reports whether the fields of an "=>" continuation line name
+// a local directory replacement (.., ., or an absolute path). Such a module is
+// built from source on disk, so its packages are compiled into the binary.
+// A module-version replacement (a full module path) is not local and needs the
+// h1: hash to prove linkage.
+func replacementPath(fields []string) bool {
+	for _, f := range fields[1:] {
+		f = strings.TrimSpace(f)
+		if f == "" || f == "=>" {
+			continue
+		}
+		if strings.HasPrefix(f, "./") || strings.HasPrefix(f, "../") || strings.HasPrefix(f, "/") {
+			return true
+		}
+	}
+	return false
 }
 
 // run executes the binary with args under a timeout, returning combined

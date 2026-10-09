@@ -79,6 +79,16 @@ func TestTUIModuleVersionReplacedWithoutHash(t *testing.T) {
 	}
 }
 
+// A filesystem replacement has no h1: hash, but a local directory is the build
+// source itself, so the TUI code is necessarily compiled into the binary.
+func TestTUIModuleVersionReplacedByLocalDir(t *testing.T) {
+	info := "\tdep\t" + TUIModulePath + "\tv0.9.0\t\n" +
+		"\t=>\t../qyvora-tui\t\n"
+	if _, linked := tuiModuleVersion(info); !linked {
+		t.Error("a => line naming a local directory must report linked")
+	}
+}
+
 // The check must be capable of failing. A stdlib-only binary has no TUI, so
 // building one and probing it proves the check discriminates rather than
 // passing everything it is handed.
