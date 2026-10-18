@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -32,11 +31,12 @@ type Framework struct {
 	FormatFlag  string   // the output-format flag, e.g. "-o"
 }
 
-// TUIModulePath is the Go module every framework must embed. An installed
-// binary carries the shared terminal UI with it, so the module has to be
-// linked into the binary rather than merely required by go.mod: a tool that
-// requires the module but never imports it ships without a TUI, and on a
-// user's machine that surfaces as a tool which starts and shows nothing.
+// TUIModulePath is the Go module the shared terminal UI lives in. The
+// per-tool session was retired fleet-wide (frameworks fca91fc, "retire
+// per-tool TUI in favor of one-shot CLI") in favour of the one-shot CLI, so
+// the distribution check asserts this module is NOT linked into a binary and
+// flips back when the session returns with qyvora-tui's redirect to the AI
+// orchestration layer (Phase 5).
 const TUIModulePath = "github.com/QYVORA/qyvora-tui"
 
 // Check is a single conformance verdict.
@@ -113,8 +113,6 @@ func buildPkg(repoDir, name string) string {
 	return "."
 }
 
-var semverSuffixRE = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+`)
-
 // Descriptor returns the probe descriptor for a known framework name.
 func Descriptor(name string) (Framework, bool) { return known(name) }
 
@@ -151,13 +149,31 @@ func known(name string) (Framework, bool) {
 	return f, true
 }
 
-// Build compiles the framework binary into buildDir.
+// conformanceVersion is what the runner stamps into its own builds. It
+// satisfies the contract's semver rule and is deliberately unlike any release
+// tag, so a conformance report can never be mistaken for a shipped artifact.
+const conformanceVersion = "9.9.9"
+
+// Build compiles the framework binary into buildDir, stamped the way the
+// release pipeline stamps it. The QYVORA output spec (section 4) says version
+// strings are stamped at release time via -ldflags -X …internal/version.Version
+// and that release artifacts MUST NOT report "dev" — while documenting the
+// unstamped dev default as correct. So the runner exercises that exact wiring
+// instead of asserting the default: a framework whose version variable moved
+// or was renamed still links (the linker ignores -X for symbols it cannot
+// find), reports "dev", and fails version-semver below, which is the breakage
+// this stamping exists to surface — goreleaser would ship the same way.
 func (f *Framework) Build(buildDir string) error {
 	target := filepath.Join(buildDir, "qf-"+f.Name)
 	if f.Package != "" {
 		target = filepath.Join(buildDir, f.Package[strings.LastIndex(f.Package, "/")+1:])
 	}
-	cmd := exec.Command("go", "build", "-o", target, f.BuildPkg)
+	args := []string{"build", "-o", target}
+	if mod := f.modulePath(); mod != "" {
+		args = append(args, "-ldflags", "-X "+mod+"/internal/version.Version="+conformanceVersion)
+	}
+	args = append(args, f.BuildPkg)
+	cmd := exec.Command("go", args...)
 	cmd.Dir = f.RepoDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -165,6 +181,22 @@ func (f *Framework) Build(buildDir string) error {
 	}
 	f.Bin = target
 	return nil
+}
+
+// modulePath reads the framework's module path from its go.mod. A miss leaves
+// the build unstamped, and version-semver then reports the "dev" default —
+// a truthful failure rather than a silently skipped stamp.
+func (f *Framework) modulePath() string {
+	data, err := os.ReadFile(filepath.Join(f.RepoDir, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if p, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
+			return strings.TrimSpace(p)
+		}
+	}
+	return ""
 }
 
 // Run executes all conformance checks against the built binary.
@@ -232,23 +264,24 @@ func (f Framework) Run() Result {
 		checks = append(checks, Check{f.Name, "capabilities", true, "no capabilities command (documented gap)"})
 	}
 
-	// 5. Distribution: the binary must embed the shared TUI, so an installed
-	// tool is never a bare CLI stripped of its interface.
-	checks = append(checks, checkTUIBundled(f.Name, f.Bin))
+	// 5. Distribution: the retired session must stay retired. A linked TUI
+	// means a framework re-registered the retired command against fca91fc.
+	checks = append(checks, checkTUIRetired(f.Name, f.Bin))
 
 	res.Checks = checks
 	return res
 }
 
-// checkTUIBundled verifies that bin links the shared TUI module.
+// checkTUIRetired probes bin's build info and reports whether the retired
+// session stayed retired.
 //
 // It reads the binary's build info rather than the repository's go.mod on
 // purpose. go.mod records the requirement; only the linker records what was
 // actually compiled in. A module can sit in go.mod, satisfy `go mod tidy`,
-// and still be absent from the binary, which is exactly the case where a
-// release ships a tool with no TUI and every test still passes.
-func checkTUIBundled(name, bin string) Check {
-	const checkName = "tui-bundled"
+// and never appear in the binary — which today is the correct state — and a
+// dep line carrying an h1: hash is the only shape that proves otherwise.
+func checkTUIRetired(name, bin string) Check {
+	const checkName = "tui-retired"
 	cmd := exec.Command("go", "version", "-m", bin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -257,19 +290,26 @@ func checkTUIBundled(name, bin string) Check {
 			detail = err.Error()
 		}
 		// Not being able to read the build info is not evidence the TUI is
-		// missing, but it is not evidence it is there either, so it fails
+		// unlinked, but it is not evidence it is linked either, so it fails
 		// rather than passing silently.
 		return Check{name, checkName, false, "cannot read build info: " + detail}
 	}
-	version, linked := tuiModuleVersion(string(out))
-	switch {
-	case linked:
-		return Check{name, checkName, true, version}
-	case version != "":
-		return Check{name, checkName, false, fmt.Sprintf("%s %s required but not linked into the binary", TUIModulePath, version)}
-	default:
-		return Check{name, checkName, false, fmt.Sprintf("%s absent from the binary", TUIModulePath)}
+	return tuiRetiredVerdict(name, string(out))
+}
+
+// tuiRetiredVerdict applies the retirement rule to `go version -m` output:
+// a linked TUI fails (the session stays retired until Phase 5); everything
+// else — required-but-unimported, replaced without a hash, or absent
+// entirely — passes.
+func tuiRetiredVerdict(name, buildInfo string) Check {
+	const checkName = "tui-retired"
+	version, linked := tuiModuleVersion(buildInfo)
+	if linked {
+		return Check{name, checkName, false, fmt.Sprintf(
+			"%s %s linked into the binary; the session stays retired until Phase 5",
+			TUIModulePath, version)}
 	}
+	return Check{name, checkName, true, "not linked"}
 }
 
 // tuiModuleVersion extracts the TUI module's version from `go version -m`

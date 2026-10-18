@@ -28,9 +28,9 @@ func TestTUIModuleVersionLinked(t *testing.T) {
 	}
 }
 
-// The case the check exists for: go.mod requires the module, so `go mod tidy`
-// is satisfied and every existing test passes, but nothing imports it and the
-// binary ships without a TUI.
+// The normal post-retirement state: go.mod requires the module, `go mod tidy`
+// is satisfied, nothing imports it, and the binary ships as the one-shot CLI.
+// The check must pass this, not fail it.
 func TestTUIModuleVersionRequiredButNotLinked(t *testing.T) {
 	info := "aksum: go1.26.8\n" +
 		"\tpath\tgithub.com/QYVORA/qyvora-aksum\n" +
@@ -89,10 +89,11 @@ func TestTUIModuleVersionReplacedByLocalDir(t *testing.T) {
 	}
 }
 
-// The check must be capable of failing. A stdlib-only binary has no TUI, so
-// building one and probing it proves the check discriminates rather than
-// passing everything it is handed.
-func TestCheckTUIBundledFailsForBinaryWithoutTUI(t *testing.T) {
+// A stdlib-only binary has no TUI, which is exactly what the retirement
+// contract wants: the probe reads its build info and the verdict passes. The
+// paired fixture test below proves the verdict still fails when a TUI is
+// linked, so the check discriminates rather than passing everything.
+func TestCheckTUIRetiredPassesForBinaryWithoutTUI(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
 	}
@@ -113,19 +114,32 @@ func TestCheckTUIBundledFailsForBinaryWithoutTUI(t *testing.T) {
 		t.Fatalf("build fixture: %v: %s", err, out)
 	}
 
-	got := checkTUIBundled("fixture", bin)
+	got := checkTUIRetired("fixture", bin)
+	if !got.Pass {
+		t.Fatalf("a binary with no TUI failed the retirement check: %+v", got)
+	}
+}
+
+// The failure the check exists for: a dep line with an h1: hash proves the
+// TUI's packages were compiled into the binary, re-registering the retired
+// session against the Phase-5 decision.
+func TestTUIRetiredVerdictFailsWhenLinked(t *testing.T) {
+	info := "aksum: go1.26.8\n" +
+		"\tpath\tgithub.com/QYVORA/qyvora-aksum\n" +
+		"\tdep\t" + TUIModulePath + "\tv0.7.1\th1:uTxgdCgJAfPZ48MWvpEePuIUT/TFeT/CMKJZxtzfyM4=\n"
+	got := tuiRetiredVerdict("fixture", info)
 	if got.Pass {
-		t.Fatalf("a binary with no TUI dependency passed: %+v", got)
+		t.Fatalf("a linked TUI passed the retirement check: %+v", got)
 	}
 	if !strings.Contains(got.Detail, TUIModulePath) {
-		t.Errorf("failure detail does not name the missing module: %q", got.Detail)
+		t.Errorf("failure detail does not name the linked module: %q", got.Detail)
 	}
 }
 
 // An unreadable or non-Go binary must fail rather than pass silently: not
-// being able to prove the TUI is present is not evidence that it is.
-func TestCheckTUIBundledFailsOnUnreadableBinary(t *testing.T) {
-	got := checkTUIBundled("missing", filepath.Join(t.TempDir(), "does-not-exist"))
+// being able to prove the TUI is unlinked is not evidence that it is.
+func TestCheckTUIRetiredFailsOnUnreadableBinary(t *testing.T) {
+	got := checkTUIRetired("missing", filepath.Join(t.TempDir(), "does-not-exist"))
 	if got.Pass {
 		t.Fatalf("a missing binary passed: %+v", got)
 	}
