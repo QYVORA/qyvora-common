@@ -9,8 +9,10 @@ import (
 )
 
 // Build info lines are tab-separated; the fixtures below are shaped from real
-// `go version -m` output rather than invented, because the whole check turns
-// on field position and the h1: marker.
+// `go version -m` output rather than invented, because the version lookup
+// turns on field position and the h1: marker. Symbol fixtures are shaped from
+// real `go tool nm` output for the same reason: the retirement verdict reads
+// the last field of each line.
 
 func TestTUIModuleVersionLinked(t *testing.T) {
 	// A dep line carrying an h1: hash is the only shape that proves the
@@ -120,19 +122,47 @@ func TestCheckTUIRetiredPassesForBinaryWithoutTUI(t *testing.T) {
 	}
 }
 
-// The failure the check exists for: a dep line with an h1: hash proves the
-// TUI's packages were compiled into the binary, re-registering the retired
-// session against the Phase-5 decision.
+// The failure the check exists for: session engine symbols surviving in the
+// binary mean a framework re-registered the retired session against the
+// Phase-5 decision. Symbol lines are shaped from real `go tool nm` output —
+// address, kind, name — where the helper-only binaries carry none of these.
 func TestTUIRetiredVerdictFailsWhenLinked(t *testing.T) {
-	info := "aksum: go1.26.8\n" +
-		"\tpath\tgithub.com/QYVORA/qyvora-aksum\n" +
+	info := "jabari: go1.26.8\n" +
+		"\tpath\tgithub.com/QYVORA/qyvora-jabari\n" +
 		"\tdep\t" + TUIModulePath + "\tv0.7.1\th1:uTxgdCgJAfPZ48MWvpEePuIUT/TFeT/CMKJZxtzfyM4=\n"
-	got := tuiRetiredVerdict("fixture", info)
+	symbols := "  851b20 T " + TUIModulePath + ".Run\n" +
+		"  851c80 T " + TUIModulePath + ".(*InProcessRunner).Run\n" +
+		"  851d40 T " + TUIModulePath + ".CobraCommands\n"
+	got := tuiRetiredVerdict("fixture", info, symbols)
 	if got.Pass {
-		t.Fatalf("a linked TUI passed the retirement check: %+v", got)
+		t.Fatalf("a linked session engine passed the retirement check: %+v", got)
 	}
 	if !strings.Contains(got.Detail, TUIModulePath) {
 		t.Errorf("failure detail does not name the linked module: %q", got.Detail)
+	}
+	if !strings.Contains(got.Detail, "Run") || !strings.Contains(got.Detail, "(*InProcessRunner)") {
+		t.Errorf("failure detail does not name the linked engine symbols: %q", got.Detail)
+	}
+}
+
+// Helper linkage is legal: five tools render their brand banner through the
+// shared CLI helpers (RenderCLIArt, InTUISession), which the retirement
+// commit kept wired on purpose. Real `go tool nm` output from jabari is
+// entirely of this shape, and the check must pass it while still failing the
+// linked engine above — that contrast is what makes the check discriminate.
+func TestTUIRetiredVerdictPassesForHelpersOnly(t *testing.T) {
+	info := "jabari: go1.26.8\n" +
+		"\tpath\tgithub.com/QYVORA/qyvora-jabari\n" +
+		"\tdep\t" + TUIModulePath + "\tv0.11.0\th1:kk4XNTRSlPUd1p2sJ7R1FeEIDOEYzmJwZ2oTK4pfoCI=\n"
+	symbols := "  e52030 D " + TUIModulePath + "..inittask\n" +
+		"  851b20 T " + TUIModulePath + ".RenderCLIArt\n" +
+		"  851220 T " + TUIModulePath + ".init.func1\n"
+	got := tuiRetiredVerdict("fixture", info, symbols)
+	if !got.Pass {
+		t.Fatalf("helper-only linkage failed the retirement check: %+v", got)
+	}
+	if !strings.Contains(got.Detail, "helpers") {
+		t.Errorf("pass detail does not say the linkage is helpers-only: %q", got.Detail)
 	}
 }
 

@@ -34,10 +34,29 @@ type Framework struct {
 // TUIModulePath is the Go module the shared terminal UI lives in. The
 // per-tool session was retired fleet-wide (frameworks fca91fc, "retire
 // per-tool TUI in favor of one-shot CLI") in favour of the one-shot CLI, so
-// the distribution check asserts this module is NOT linked into a binary and
-// flips back when the session returns with qyvora-tui's redirect to the AI
-// orchestration layer (Phase 5).
+// the distribution check asserts the session engine (see tuiSessionSymbols)
+// is NOT linked into a binary and flips back when the session returns with
+// qyvora-tui's redirect to the AI orchestration layer (Phase 5).
+//
+// The module itself is allowed to be linked: its root package also carries
+// the shared CLI brand helpers (RenderCLIArt, InTUISession, ThinBanner) that
+// five tools render banners through, and the retirement commit kept that
+// wiring on purpose. Module-level linkage therefore proves nothing about the
+// session either way — the symbol table is what discriminates.
 const TUIModulePath = "github.com/QYVORA/qyvora-tui"
+
+// tuiSessionSymbols are the session engine's symbols in TUIModulePath: the
+// entry point that starts the interactive session, the runner that executes
+// commands inside it, and the cobra adapter that feeds it the command tree.
+// Every framework references them only from its per-tool tui.go, all of which
+// sit behind //go:build ignore, so any of these appearing in a binary means a
+// framework re-registered the retired session. The shared CLI helpers are
+// deliberately absent from this list: helper linkage is legal.
+var tuiSessionSymbols = []string{
+	TUIModulePath + ".Run",
+	TUIModulePath + ".(*InProcessRunner)",
+	TUIModulePath + ".CobraCommands",
+}
 
 // Check is a single conformance verdict.
 type Check struct {
@@ -264,56 +283,103 @@ func (f Framework) Run() Result {
 		checks = append(checks, Check{f.Name, "capabilities", true, "no capabilities command (documented gap)"})
 	}
 
-	// 5. Distribution: the retired session must stay retired. A linked TUI
-	// means a framework re-registered the retired command against fca91fc.
+	// 5. Distribution: the retired session must stay retired. A linked
+	// session engine means a framework re-registered the retired command
+	// against fca91fc; the shared banner helpers may remain linked.
 	checks = append(checks, checkTUIRetired(f.Name, f.Bin))
 
 	res.Checks = checks
 	return res
 }
 
-// checkTUIRetired probes bin's build info and reports whether the retired
+// checkTUIRetired inspects bin's symbols and reports whether the retired
 // session stayed retired.
 //
-// It reads the binary's build info rather than the repository's go.mod on
-// purpose. go.mod records the requirement; only the linker records what was
-// actually compiled in. A module can sit in go.mod, satisfy `go mod tidy`,
-// and never appear in the binary — which today is the correct state — and a
-// dep line carrying an h1: hash is the only shape that proves otherwise.
+// It inspects the binary rather than the repository's go.mod on purpose:
+// go.mod records the requirement, only the binary records what was wired.
+// The verdict rests on the session engine's symbols (tuiSessionSymbols)
+// because the module's shared CLI helpers are linked by design in every tool
+// that renders its banner through them — module linkage alone would fail the
+// five tools that legitimately kept that wiring. go version -m is read too,
+// but only so the detail can name the linked module's version.
 func checkTUIRetired(name, bin string) Check {
 	const checkName = "tui-retired"
-	cmd := exec.Command("go", "version", "-m", bin)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		detail := strings.TrimSpace(string(out))
+	symOut, symErr := exec.Command("go", "tool", "nm", bin).CombinedOutput()
+	if symErr != nil {
+		detail := strings.TrimSpace(string(symOut))
 		if detail == "" {
-			detail = err.Error()
+			detail = symErr.Error()
 		}
-		// Not being able to read the build info is not evidence the TUI is
+		// Not being able to read the symbols is not evidence the session is
 		// unlinked, but it is not evidence it is linked either, so it fails
 		// rather than passing silently.
-		return Check{name, checkName, false, "cannot read build info: " + detail}
+		return Check{name, checkName, false, "cannot inspect symbols: " + detail}
 	}
-	return tuiRetiredVerdict(name, string(out))
+	infoOut, _ := exec.Command("go", "version", "-m", bin).CombinedOutput()
+	return tuiRetiredVerdict(name, string(infoOut), string(symOut))
 }
 
-// tuiRetiredVerdict applies the retirement rule to `go version -m` output:
-// a linked TUI fails (the session stays retired until Phase 5); everything
-// else — required-but-unimported, replaced without a hash, or absent
-// entirely — passes.
-func tuiRetiredVerdict(name, buildInfo string) Check {
+// tuiRetiredVerdict applies the retirement rule to the binary's symbol table,
+// with the build info supplying the module version for the message: a linked
+// session engine fails (the session stays retired until Phase 5); a module
+// linked only for its shared CLI banner helpers passes; a binary with no
+// trace of the module passes.
+func tuiRetiredVerdict(name, buildInfo, symbols string) Check {
 	const checkName = "tui-retired"
-	version, linked := tuiModuleVersion(buildInfo)
-	if linked {
-		return Check{name, checkName, false, fmt.Sprintf(
-			"%s %s linked into the binary; the session stays retired until Phase 5",
-			TUIModulePath, version)}
+	version, _ := tuiModuleVersion(buildInfo)
+	ver := ""
+	if version != "" {
+		ver = " " + version
 	}
-	return Check{name, checkName, true, "not linked"}
+	if linked := tuiSessionSymbolsLinked(symbols); len(linked) > 0 {
+		short := make([]string, len(linked))
+		for i, s := range linked {
+			short[i] = strings.TrimPrefix(s, TUIModulePath+".")
+		}
+		return Check{name, checkName, false, fmt.Sprintf(
+			"%s%s linked session engine (%s); the session stays retired until Phase 5",
+			TUIModulePath, ver, strings.Join(short, ", "))}
+	}
+	if strings.Contains(symbols, TUIModulePath+".") {
+		return Check{name, checkName, true, fmt.Sprintf(
+			"session not linked; %s%s linked for shared CLI banner helpers only",
+			TUIModulePath, ver)}
+	}
+	return Check{name, checkName, true, "session not linked"}
+}
+
+// tuiSessionSymbolsLinked returns which of tuiSessionSymbols appear in
+// `go tool nm` output. Symbol lines are space-separated — address, kind,
+// name — so the name is the last field. A name matches exactly (a
+// package-level function such as ...qyvora-tui.Run) or with a dotted suffix
+// (a method on InProcessRunner, whose symbol reads
+// ...qyvora-tui.(*InProcessRunner).Run), while the dotted suffix keeps
+// Run from matching an unrelated RunSomething.
+func tuiSessionSymbolsLinked(symbols string) []string {
+	var found []string
+	seen := map[string]bool{}
+	for _, line := range strings.Split(symbols, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		sym := fields[len(fields)-1]
+		for _, want := range tuiSessionSymbols {
+			if seen[want] || (sym != want && !strings.HasPrefix(sym, want+".")) {
+				continue
+			}
+			seen[want] = true
+			found = append(found, want)
+		}
+	}
+	return found
 }
 
 // tuiModuleVersion extracts the TUI module's version from `go version -m`
-// output and reports whether its code was linked into the binary.
+// output and reports whether the build info claims its code was linked into
+// the binary. The retirement verdict turns on the symbol table, not this
+// flag; the flag still answers what the build info itself records, which is
+// the difference between a requirement satisfied and code compiled in.
 //
 // A build-info line is tab-separated and the module path is not necessarily
 // the first field: a dependency reads "dep", path, version, "h1:" hash. So the
@@ -322,13 +388,12 @@ func tuiRetiredVerdict(name, buildInfo string) Check {
 //
 // The h1: hash is the discriminator. A module that is required but whose
 // packages were never imported is listed without one, so treating a line's
-// mere presence as proof of linkage would pass exactly the binaries this
-// check exists to catch.
+// mere presence as proof of linkage would report compiled-out code as wired.
 //
 // A module resolved through a replace directive is split across two lines,
 // with the "=>" continuation carrying the hash. No framework replaces the TUI
 // today, but reading only the dep line would report such a binary as
-// unlinked, which would be a false failure rather than a useful signal.
+// unlinked, which is wrong rather than merely unhelpful.
 func tuiModuleVersion(buildInfo string) (version string, linked bool) {
 	lines := strings.Split(buildInfo, "\n")
 	for i, line := range lines {
