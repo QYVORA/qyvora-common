@@ -30,7 +30,7 @@ type CheckResult struct {
 }
 
 var frameworks = []Framework{
-	{Name: "anansi", Description: "Web attack surface intelligence", Tier3Type: "Shape A"},
+	{Name: "anansi", Description: "Web application penetration testing framework", Tier3Type: "Shape A"},
 	{Name: "toha3ee", Description: "Network security assessment", Tier3Type: "Shape A", ExtraFlags: []string{"--no-sudo"}},
 	{Name: "jabari", Description: "Android security assessment", Tier3Type: "Shape A"},
 	{Name: "aksum", Description: "Binary analysis & reverse engineering", Tier3Type: "Shape B"},

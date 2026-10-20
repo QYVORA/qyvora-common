@@ -54,7 +54,7 @@ See `../CONFORMANCE-TOOLS-ANALYSIS.md` for detailed comparison.
 
 ## Frameworks Checked
 
-1. anansi - Web attack surface intelligence
+1. anansi - Web application penetration testing framework
 2. toha3ee - Network security assessment
 3. jabari - Android security assessment
 4. aksum - Binary analysis & reverse engineering
