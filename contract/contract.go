@@ -3,12 +3,12 @@
 // (docs/QYVORA-FRAMEWORK-MACHINE-LAYER-READINESS-AUDIT.md, section 14).
 //
 // The frameworks do NOT import this module: each implements the contract
-// natively. This package is the reference schema used by the conformance
-// runner to verify that a real binary honours the contract
-// (subpackage qyvora-common/conformance).
+// natively. This package is the reference schema used by the standalone
+// qyvora-conformance runner to verify that a real binary honours the contract.
 package contract
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 )
@@ -30,15 +30,25 @@ type Identity struct {
 	SchemaVersion string `json:"schema_version,omitempty"`
 }
 
-// Envelope is the JSONL event envelope emitted on the event stream.
+// Envelope is the canonical JSONL event envelope emitted on the event stream.
+// It mirrors github.com/QYVORA/qyvora-models.Event. The legacy identity fields
+// remain for compatibility; new producers should also set EventType.
 type Envelope struct {
-	SchemaVersion string         `json:"schema_version"`
-	Timestamp     string         `json:"timestamp"`
-	ExecutionID   string         `json:"execution_id"`
-	Framework     string         `json:"framework"`
-	Level         string         `json:"level"`
-	Event         string         `json:"event"`
-	Data          map[string]any `json:"data,omitempty"`
+	SchemaVersion string          `json:"schema_version,omitempty"`
+	Timestamp     string          `json:"timestamp"`
+	ExecutionID   string          `json:"execution_id,omitempty"`
+	Framework     string          `json:"framework"`
+	Level         string          `json:"level,omitempty"`
+	Event         string          `json:"event,omitempty"`
+	Tier          string          `json:"tier,omitempty"`
+	Module        string          `json:"module,omitempty"`
+	Action        string          `json:"action,omitempty"`
+	EventType     string          `json:"event_type"`
+	Severity      string          `json:"severity,omitempty"`
+	Target        string          `json:"target,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	SessionID     string          `json:"session_id,omitempty"`
+	RunID         string          `json:"run_id,omitempty"`
 }
 
 // Context ties one run to a result, a target and an optional session.
