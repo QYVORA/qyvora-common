@@ -1,7 +1,7 @@
 # qyvora-common
 
 **Status:** `CURRENT` · **Not a security tool**
-**Version:** `v0.2.0`
+**Version:** `v0.2.1`
 **Last verified against implementation:** 2026-10-31
 
 `qyvora-common` is the reference machine contract and capability validator for
@@ -24,6 +24,18 @@ terminal UI), `qyvora-script` (shared scripting engine) and `qyvora-dist`
 `contract/` is the authored schema the frameworks are measured against. It is
 not linked into framework binaries. `qyvora-conformance` imports it as the
 reference schema for behavioral checks.
+
+## Tests
+
+```sh
+./test/run-all-tests.sh --fast   # gofmt/vet/build/unit tests
+./test/run-all-tests.sh --full   # also exercises the capvalidator CLI
+```
+
+Full mode builds `qyvora-capvalidator` into a temporary root and runs it against
+fake framework binaries, covering valid capabilities, invalid JSON, missing
+binaries, unknown tools, and gap-report output. No real framework binaries are
+needed.
 
 ## Contents
 

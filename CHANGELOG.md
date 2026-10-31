@@ -2,6 +2,16 @@
 
 All notable changes to `qyvora-common` are documented here.
 
+## v0.2.1 - 2026-10-31
+
+### Added
+
+- `test/run-all-tests.sh` with fast and full modes.
+- Full mode exercises `qyvora-capvalidator` against fake framework binaries,
+  including valid/invalid capability JSON, missing binaries, unknown tools, and
+  gap-report output.
+- CI now runs the local suite.
+
 ## v0.2.0 - 2026-10-31
 
 ### Changed
