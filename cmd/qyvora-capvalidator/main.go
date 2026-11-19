@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const version = "0.1.0"
@@ -367,7 +368,7 @@ func printResults(results []CheckResult, total, passed int) {
 func printGapReport(results []CheckResult) {
 	fmt.Println("# QYVORA Capability Gap Report")
 	fmt.Println()
-	fmt.Printf("Generated: %s\n", "2026-10-07") // TODO: use actual date
+	fmt.Printf("Generated: %s\n", time.Now().UTC().Format("2006-01-02"))
 	fmt.Println("Tool: qyvora-conformance " + version)
 	fmt.Println()
 	fmt.Println("This report audits all 14 QYVORA frameworks against the standards defined in PROMPT.md.")

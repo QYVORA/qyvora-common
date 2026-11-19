@@ -12,6 +12,10 @@ It is one of four supporting repositories alongside `qyvora-tui` (shared
 terminal UI), `qyvora-script` (shared scripting engine) and `qyvora-dist`
 (distribution). **None of them is a security framework.**
 
+**Planned v0.3.0:** contract additions for agent tool descriptors, tool-call
+envelopes, and engagement/scope metadata so conformance can validate the same
+surface the agent runtime uses.
+
 ## What this module is
 
 | | |
@@ -97,5 +101,5 @@ files. It complements, but does not replace, behavioral conformance.
 - [`qyvora-models`](../../platform/qyvora-models) — Go wire types used by the
   platform, events and intelligence layers.
 - [`qyvora-conformance`](../qyvora-conformance) — behavioral conformance.
-- [`QYVORA-TOOL-OUTPUT-SPEC.md`](../../../knowledge/qyvora-docs/09-technical/cross-project/QYVORA-TOOL-OUTPUT-SPEC.md)
+- [`QYVORA-TOOL-OUTPUT-SPEC.md`](../../../../knowledge/qyvora-docs/09-technical/cross-project/standards/QYVORA-TOOL-OUTPUT-SPEC.md)
   — normative output contract.
