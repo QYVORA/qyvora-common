@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+var version = "dev"
 
 // Framework represents one QYVORA security framework
 type Framework struct {
@@ -84,7 +84,7 @@ func main() {
 	}
 
 	if !*flagReport {
-		fmt.Printf("qyvora-conformance %s\n", version)
+		fmt.Printf("qyvora-capvalidator %s\n", version)
 		fmt.Printf("Checking %d framework(s)...\n\n", len(toCheck))
 	}
 
@@ -115,10 +115,10 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `qyvora-conformance - Conformance testing for QYVORA frameworks
+	fmt.Fprintf(os.Stderr, `qyvora-capvalidator - Conformance testing for QYVORA frameworks
 
 Usage:
-  conformance [flags]
+  qyvora-capvalidator [flags]
 
 Flags:
   --tool <name>    Check only the specified framework
@@ -127,9 +127,9 @@ Flags:
   -h, --help       Show this help
 
 Examples:
-  conformance                    # Check all 14 frameworks
-  conformance --tool anansi      # Check only anansi
-  conformance --report           # Generate gap report
+  qyvora-capvalidator                    # Check all 14 frameworks
+  qyvora-capvalidator --tool anansi      # Check only anansi
+  qyvora-capvalidator --report           # Generate gap report
 
 Exit codes:
   0  All checks passed
@@ -369,7 +369,7 @@ func printGapReport(results []CheckResult) {
 	fmt.Println("# QYVORA Capability Gap Report")
 	fmt.Println()
 	fmt.Printf("Generated: %s\n", time.Now().UTC().Format("2006-01-02"))
-	fmt.Println("Tool: qyvora-conformance " + version)
+	fmt.Println("Tool: qyvora-capvalidator " + version)
 	fmt.Println()
 	fmt.Println("This report audits all 14 QYVORA frameworks against the standards defined in PROMPT.md.")
 	fmt.Println()

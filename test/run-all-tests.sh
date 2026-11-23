@@ -37,8 +37,8 @@ if ! command -v go >/dev/null 2>&1; then
     printf 'go is required\n' >&2
     exit 1
 fi
-export GOPRIVATE="${GOPRIVATE:-github.com/QYVORA/*}"
-export GOPROXY="${GOPROXY:-direct}"
+export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
+export GOSUMDB="${GOSUMDB:-sum.golang.org}"
 
 GRN=''; RED=''; YEL=''; BLD=''; OFF=''
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "$NO_COLOR" -eq 0 ]; then

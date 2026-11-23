@@ -1,0 +1,8 @@
+qyvora-common
+Copyright (c) 2026 QYVORA
+
+This repository is part of the QYVORA product family.
+
+Third-party dependencies used by this module are listed in
+THIRD-PARTY-LICENSES.md. No third-party source code is vendored in this
+repository.
