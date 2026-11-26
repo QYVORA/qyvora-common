@@ -4,6 +4,8 @@
 **Version:** `v0.2.1`
 **Last verified against implementation:** 2026-10-31
 
+**Readiness:** `INTERNAL` supporting shared contract component, not a standalone public product and no public readiness claim. See the [Product Registry](../../../../knowledge/qyvora-docs/07-products/PRODUCT-REGISTRY.md).
+
 `qyvora-common` is the reference machine contract and capability validator for
 the fourteen QYVORA security frameworks. The behavioral conformance runner now
 lives in the standalone [`qyvora-conformance`](../qyvora-conformance) module.
